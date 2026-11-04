@@ -1,0 +1,32 @@
+{
+	"name": "Book Recommendations Lakehouse",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"features": {
+		"ghcr.io/kingbain/devcontainer-features-databricks/databricks-cli:0": {},
+		"ghcr.io/postfinance/devcontainer-features/terraform:1": {}
+	},
+	"postCreateCommand": "uv sync",
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python"
+			},
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.debugpy",
+				"ms-tools-vscode.vs-kubernetes-tools",
+				"charliermarsh.ruff",
+				"ms-python.black-formatter",
+				"ms-vscode.makefile-tools",
+				"Jupyter.jupyter",
+				"Jupyter.jupyter-keymap",
+				"hashicorp.terraform", 
+				"databricks.databricks"
+			]
+		}
+	},
+	"remoteUser": "root"
+}
