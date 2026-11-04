@@ -8,7 +8,7 @@ variable "layers" {
   default = ["bronze", "silver", "gold"]
 }
 
-variable "catalog_name" {
-  type        = string
-  description = "Existing catalog to create schemas in"
+variable "catalogs" {
+  type        = list(string)
+  description = "List of existing catalogs to create schemas in"
 }
