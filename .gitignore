@@ -1,0 +1,8 @@
+data/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.terraform*
+.DS_Store
+*devcontainer-lock.json
+.venv
