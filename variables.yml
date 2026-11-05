@@ -1,0 +1,4 @@
+variables:
+  catalog:
+    description: "The name of the Databricks catalog to use for the lakehouse"
+    default: "books_dataset_dev"

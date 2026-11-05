@@ -28,3 +28,12 @@ resource "databricks_volume" "checkpoints" {
   name         = "checkpoints"
   volume_type  = "MANAGED"
 }
+
+resource "databricks_volume" "schemas" {
+  for_each     = local.catalog_layers
+  catalog_name = each.value.catalog
+  schema_name  = databricks_schema.layer[each.key].name
+  name         = "schemas"
+  volume_type  = "MANAGED"
+}
+

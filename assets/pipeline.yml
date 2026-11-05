@@ -1,0 +1,68 @@
+resources:
+  jobs:
+    books_dataset_pipeline:
+      name: "Books Dataset Pipeline"
+
+      trigger:
+        file_arrival:
+          url: /Volumes/${var.catalog}/bronze/landing/
+        pause_status: UNPAUSED
+
+      environments:
+        - environment_key: pyspark_env
+          spec:
+            environment_version: "2"
+            dependencies: []
+
+      tasks:
+        - task_key: books_autoloader
+          environment_key: pyspark_env
+          spark_python_task:
+            python_file: ../src/books_dataset/bronze/autoloader.py
+            parameters:
+              - "--dataset-dir"
+              - "/Volumes/${var.catalog}/bronze/landing/books"
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "bronze"
+              - "--table"
+              - "books_raw"
+              - "--checkpoint-dir"
+              - "/Volumes/${var.catalog}/bronze/checkpoints/books"
+              - "--schema-dir"
+              - "/Volumes/${var.catalog}/bronze/schemas/books"
+        - task_key: ratings_autoloader
+          environment_key: pyspark_env
+          spark_python_task:
+            python_file: ../src/books_dataset/bronze/autoloader.py
+            parameters:
+              - "--dataset-dir"
+              - "/Volumes/${var.catalog}/bronze/landing/ratings"
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "bronze"
+              - "--table"
+              - "ratings_raw"
+              - "--checkpoint-dir"
+              - "/Volumes/${var.catalog}/bronze/checkpoints/ratings"
+              - "--schema-dir"
+              - "/Volumes/${var.catalog}/bronze/schemas/ratings"
+        - task_key: users_autoloader
+          environment_key: pyspark_env
+          spark_python_task:
+            python_file: ../src/books_dataset/bronze/autoloader.py
+            parameters:
+              - "--dataset-dir"
+              - "/Volumes/${var.catalog}/bronze/landing/users"
+              - "--catalog"
+              - "${var.catalog}"
+              - "--schema"
+              - "bronze"
+              - "--table"
+              - "users_raw"
+              - "--checkpoint-dir"
+              - "/Volumes/${var.catalog}/bronze/checkpoints/users"
+              - "--schema-dir"
+              - "/Volumes/${var.catalog}/bronze/schemas/users"

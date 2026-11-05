@@ -6,3 +6,4 @@ data/
 .DS_Store
 *devcontainer-lock.json
 .venv
+.vscode

@@ -1,7 +1,7 @@
 [project]
-name = "book-recommendations-lakehouse"
+name = "books-dataset"
 version = "0.1.0"
-description = "Book recommendations lakehouse"
+description = "Books dataset lakehouse"
 requires-python = ">=3.11"
 dependencies = [
     "requests",
@@ -18,6 +18,7 @@ dev = [
 ]
 
 [project.scripts]
+autoloader = "books_dataset.bronze.autoloader:cli"
 
 [build-system]
 requires = ["hatchling"]

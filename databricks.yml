@@ -1,0 +1,23 @@
+bundle:
+  name: books_dataset
+include:
+  - assets/*.yml
+  - variables.yml
+
+artifacts:
+  default:
+    type: whl
+    build: uv build --wheel
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: "https://dbc-13aaaa5e-3113.cloud.databricks.com/"
+  prod:
+    mode: production
+    variables:
+      catalog: "books_dataset_prod"
+    workspace:
+      host: "https://dbc-13aaaa5e-3113.cloud.databricks.com/"
+      root_path: /Workspace/Users/youssef.haridy@gmail.com/.bundle/${bundle.name}/${bundle.target}
