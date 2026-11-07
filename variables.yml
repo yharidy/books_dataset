@@ -2,3 +2,6 @@ variables:
   catalog:
     description: "The name of the Databricks catalog to use for the lakehouse"
     default: "books_dataset_dev"
+  warehouse_id:
+    description: Warehouse ID
+    default: "55c964975b594300"

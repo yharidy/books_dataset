@@ -1,0 +1,16 @@
+resources:
+  pipelines:
+    books_rating_stats_gold_pipeline:
+      name: books_rating_stats_gold_${bundle.target}
+      tags:
+        environment: ${bundle.target}
+        dataset: "books_dataset"
+        layer: "gold"
+      serverless: true
+      catalog: ${var.catalog}
+      schema: gold
+      configuration:
+        catalog: ${var.catalog}
+      libraries:
+        - file:
+            path: ../src/books_dataset/gold/views/books_rating_stats.sql

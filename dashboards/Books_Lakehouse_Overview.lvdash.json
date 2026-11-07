@@ -1,0 +1,1535 @@
+{
+  "datasets": [
+    {
+      "name": "books_funnel",
+      "displayName": "Gold Books (MV)",
+      "queryLines": [
+        "SELECT\n",
+        "  `isbn`,\n",
+        "  `book_title`,\n",
+        "  `book_author`,\n",
+        "  `publisher`,\n",
+        "  `year_of_publication`,\n",
+        "  `explicit_ratings`,\n",
+        "  `sum_ratings`\n",
+        "FROM\n",
+        "  gold.books_rating_stats\n",
+        "WHERE\n",
+        "  (\n",
+        "    :pub_year_range.min IS NULL\n",
+        "    OR (\n",
+        "      `year_of_publication` IS NOT NULL\n",
+        "      AND `year_of_publication` >= YEAR(:pub_year_range.min)\n",
+        "    )\n",
+        "  )\n",
+        "  AND (\n",
+        "    :pub_year_range.max IS NULL\n",
+        "    OR (\n",
+        "      `year_of_publication` IS NOT NULL\n",
+        "      AND `year_of_publication` <= YEAR(:pub_year_range.max)\n",
+        "    )\n",
+        "  )"
+      ],
+      "parameters": [
+        {
+          "displayName": "Publication Year Range",
+          "keyword": "pub_year_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "1995-01-01"
+              },
+              "max": {
+                "value": "2004-12-31"
+              }
+            }
+          }
+        }
+      ],
+      "columns": [
+        {
+          "displayName": "Avg Explicit Rating",
+          "description": "Average explicit rating (1-10): total explicit rating points / explicit rating count. Recomputes correctly at any grouping and under filters.",
+          "expression": "ROUND(SUM(`sum_ratings`) / NULLIF(SUM(`explicit_ratings`), 0), 2)"
+        }
+      ]
+    },
+    {
+      "name": "users_funnel",
+      "displayName": "Silver Users",
+      "queryLines": [
+        "SELECT\n",
+        "  `user_id`,\n",
+        "  CASE\n",
+        "    WHEN lower(trim(`country`)) = 'usa' THEN 'United States of America'\n",
+        "    ELSE INITCAP(`country`)\n",
+        "  END AS country,\n",
+        "  CAST(`age` AS INT) AS age,\n",
+        "  CAST(FLOOR(`age` / 10) * 10 AS INT) AS age_bin\n",
+        "FROM\n",
+        "  silver.users"
+      ]
+    },
+    {
+      "name": "ratings_funnel",
+      "displayName": "Layer Counts",
+      "queryLines": [
+        "SELECT\n",
+        "  'Books' AS stream,\n",
+        "  '1 · Bronze' AS layer,\n",
+        "  COUNT(*) AS row_count\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      TRY_CAST(`Year-Of-Publication` AS INT) AS year_of_publication\n",
+        "    FROM\n",
+        "      bronze.books_raw\n",
+        "  ) t\n",
+        "WHERE\n",
+        "  (\n",
+        "    :pub_year_range.min IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication >= YEAR(:pub_year_range.min)\n",
+        "    )\n",
+        "  )\n",
+        "  AND (\n",
+        "    :pub_year_range.max IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication <= YEAR(:pub_year_range.max)\n",
+        "    )\n",
+        "  )\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Books',\n",
+        "  '2 · Silver',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      `year_of_publication`\n",
+        "    FROM\n",
+        "      silver.books\n",
+        "  ) t\n",
+        "WHERE\n",
+        "  (\n",
+        "    :pub_year_range.min IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication >= YEAR(:pub_year_range.min)\n",
+        "    )\n",
+        "  )\n",
+        "  AND (\n",
+        "    :pub_year_range.max IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication <= YEAR(:pub_year_range.max)\n",
+        "    )\n",
+        "  )\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Books',\n",
+        "  '3 · Quarantined (silver)',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      TRY_CAST(`year_of_publication` AS INT) AS year_of_publication\n",
+        "    FROM\n",
+        "      silver.books_invalid\n",
+        "  ) t\n",
+        "WHERE\n",
+        "  (\n",
+        "    :pub_year_range.min IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication >= YEAR(:pub_year_range.min)\n",
+        "    )\n",
+        "  )\n",
+        "  AND (\n",
+        "    :pub_year_range.max IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication <= YEAR(:pub_year_range.max)\n",
+        "    )\n",
+        "  )\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Books',\n",
+        "  '4 · Gold',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      `year_of_publication`\n",
+        "    FROM\n",
+        "      gold.books_rating_stats\n",
+        "  ) t\n",
+        "WHERE\n",
+        "  (\n",
+        "    :pub_year_range.min IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication >= YEAR(:pub_year_range.min)\n",
+        "    )\n",
+        "  )\n",
+        "  AND (\n",
+        "    :pub_year_range.max IS NULL\n",
+        "    OR (\n",
+        "      t.year_of_publication IS NOT NULL\n",
+        "      AND t.year_of_publication <= YEAR(:pub_year_range.max)\n",
+        "    )\n",
+        "  )\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Ratings',\n",
+        "  '1 · Bronze',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  bronze.ratings_raw `r`\n",
+        "    LEFT JOIN (\n",
+        "      SELECT\n",
+        "        `ISBN` AS isbn,\n",
+        "        TRY_CAST(`Year-Of-Publication` AS INT) AS year_of_publication\n",
+        "      FROM\n",
+        "        bronze.books_raw\n",
+        "    ) `b`\n",
+        "      ON `b`.`isbn` = `r`.`ISBN`\n",
+        "WHERE\n",
+        "  (\n",
+        "    :pub_year_range.min IS NULL\n",
+        "    OR (\n",
+        "      `b`.`year_of_publication` IS NOT NULL\n",
+        "      AND `b`.`year_of_publication` >= YEAR(:pub_year_range.min)\n",
+        "    )\n",
+        "  )\n",
+        "  AND (\n",
+        "    :pub_year_range.max IS NULL\n",
+        "    OR (\n",
+        "      `b`.`year_of_publication` IS NOT NULL\n",
+        "      AND `b`.`year_of_publication` <= YEAR(:pub_year_range.max)\n",
+        "    )\n",
+        "  )\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Ratings',\n",
+        "  '2 · Silver',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  silver.ratings `r`\n",
+        "    LEFT JOIN silver.books `b`\n",
+        "      ON `b`.`isbn` = `r`.`isbn`\n",
+        "WHERE\n",
+        "  (\n",
+        "    :pub_year_range.min IS NULL\n",
+        "    OR (\n",
+        "      `b`.`year_of_publication` IS NOT NULL\n",
+        "      AND `b`.`year_of_publication` >= YEAR(:pub_year_range.min)\n",
+        "    )\n",
+        "  )\n",
+        "  AND (\n",
+        "    :pub_year_range.max IS NULL\n",
+        "    OR (\n",
+        "      `b`.`year_of_publication` IS NOT NULL\n",
+        "      AND `b`.`year_of_publication` <= YEAR(:pub_year_range.max)\n",
+        "    )\n",
+        "  )\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Ratings',\n",
+        "  '3 · Quarantined (silver)',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  silver.ratings_invalid\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Users',\n",
+        "  '1 · Bronze',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  bronze.users_raw\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Users',\n",
+        "  '2 · Silver',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  silver.users\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Users',\n",
+        "  '3 · Quarantined (silver)',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  silver.users_invalid"
+      ],
+      "parameters": [
+        {
+          "displayName": "Publication Year Range",
+          "keyword": "pub_year_range",
+          "dataType": "DATE",
+          "complexType": "RANGE",
+          "defaultSelection": {
+            "range": {
+              "dataType": "DATE",
+              "min": {
+                "value": "1995-01-01"
+              },
+              "max": {
+                "value": "2004-12-31"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "active_users",
+      "displayName": "Top Users by Activity",
+      "queryLines": [
+        "WITH user_stats AS (\n",
+        "  SELECT\n",
+        "    `r`.`user_id` AS user_id,\n",
+        "    MAX(\n",
+        "      CASE\n",
+        "        WHEN lower(trim(`u`.`country`)) = 'usa' THEN 'United States of America'\n",
+        "        ELSE INITCAP(`u`.`country`)\n",
+        "      END\n",
+        "    ) AS country,\n",
+        "    MAX(CAST(`u`.`age` AS INT)) AS age,\n",
+        "    COUNT_IF(`r`.`book_rating` > 0) AS explicit_count,\n",
+        "    COUNT(*) AS rating_count\n",
+        "  FROM\n",
+        "    silver.ratings `r`\n",
+        "      LEFT JOIN silver.users `u`\n",
+        "        ON `u`.`user_id` = TRY_CAST(`r`.`user_id` AS STRING)\n",
+        "  GROUP BY\n",
+        "    `r`.`user_id`\n",
+        ")\n",
+        "(\n",
+        "  SELECT\n",
+        "    'Active (Explicit)' AS list_type,\n",
+        "    ROW_NUMBER() OVER (ORDER BY explicit_count DESC, user_id) AS user_rank,\n",
+        "    user_id,\n",
+        "    country,\n",
+        "    age,\n",
+        "    explicit_count,\n",
+        "    rating_count\n",
+        "  FROM\n",
+        "    user_stats\n",
+        "  ORDER BY\n",
+        "    explicit_count DESC,\n",
+        "    user_id\n",
+        "  LIMIT 10\n",
+        ")\n",
+        "UNION ALL\n",
+        "(\n",
+        "  SELECT\n",
+        "    'Buyers (All Ratings)' AS list_type,\n",
+        "    ROW_NUMBER() OVER (ORDER BY rating_count DESC, user_id) AS user_rank,\n",
+        "    user_id,\n",
+        "    country,\n",
+        "    age,\n",
+        "    explicit_count,\n",
+        "    rating_count\n",
+        "  FROM\n",
+        "    user_stats\n",
+        "  ORDER BY\n",
+        "    rating_count DESC,\n",
+        "    user_id\n",
+        "  LIMIT 10\n",
+        ")\n",
+        "ORDER BY\n",
+        "  list_type,\n",
+        "  user_rank"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "e8cff058",
+      "displayName": "Untitled page",
+      "layout": [
+        {
+          "widget": {
+            "name": "header_text",
+            "spec": {
+              "widgetType": "text",
+              "version": 1,
+              "encodings": {
+                "text": {
+                  "lines": [
+                    "# 📚 Books Lakehouse Dashboard\n",
+                    "\n",
+                    "**What this shows** — the Book-Crossing lakehouse, stage by stage. Bronze ingests the raw CSVs, silver validates each row (bad rows are quarantined, not dropped), and gold joins validated books with their rating stats via a metric view.<br>**How to use it** — slice every widget with the filters above: publication period (default 1995–2004), author, publisher, and country. The rankings average explicit ratings (1–10 scale, implicit 0 ratings excluded, books with ≥3 explicit ratings only); the user tables list the 10 most active raters and the 10 “highest buyers” (all ratings incl. implicit); and the bottom bar charts show how many rows survive each pipeline layer."
+                  ],
+                  "fields": []
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_pub_year",
+            "queries": [
+              {
+                "name": "parameter_dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa46c291b49b1e797ef2bdb729b_pub_year_range",
+                "query": {
+                  "datasetName": "books_funnel",
+                  "parameters": [
+                    {
+                      "name": "pub_year_range",
+                      "keyword": "pub_year_range"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa48ce31b669d290d60270881fe_pub_year_range",
+                "query": {
+                  "datasetName": "ratings_funnel",
+                  "parameters": [
+                    {
+                      "name": "pub_year_range",
+                      "keyword": "pub_year_range"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Publication Period"
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "pub_year_range",
+                    "queryName": "parameter_dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa46c291b49b1e797ef2bdb729b_pub_year_range"
+                  },
+                  {
+                    "parameterName": "pub_year_range",
+                    "queryName": "parameter_dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa48ce31b669d290d60270881fe_pub_year_range"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_author",
+            "queries": [
+              {
+                "name": "dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa46c291b49b1e797ef2bdb729b_book_author",
+                "query": {
+                  "datasetName": "books_funnel",
+                  "fields": [
+                    {
+                      "name": "book_author",
+                      "expression": "`book_author`"
+                    },
+                    {
+                      "name": "book_author_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Author"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "book_author",
+                    "queryName": "dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa46c291b49b1e797ef2bdb729b_book_author"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 3,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_publisher",
+            "queries": [
+              {
+                "name": "dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa46c291b49b1e797ef2bdb729b_publisher",
+                "query": {
+                  "datasetName": "books_funnel",
+                  "fields": [
+                    {
+                      "name": "publisher",
+                      "expression": "`publisher`"
+                    },
+                    {
+                      "name": "publisher_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Publisher"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "publisher",
+                    "queryName": "dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa46c291b49b1e797ef2bdb729b_publisher"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_country",
+            "queries": [
+              {
+                "name": "dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa48b0214f8865068ba75ed42dd_country",
+                "query": {
+                  "datasetName": "users_funnel",
+                  "fields": [
+                    {
+                      "name": "country",
+                      "expression": "`country`"
+                    },
+                    {
+                      "name": "country_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Country"
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "country",
+                    "queryName": "dashboards/01f1daa399b21933a3f2f4a259616358/datasets/01f1daa48b0214f8865068ba75ed42dd_country"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 3,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "tb_counter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "books_funnel",
+                  "fields": [
+                    {
+                      "name": "count(isbn)",
+                      "expression": "COUNT(`isbn`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Total Books"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(isbn)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "tr_counter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ratings_funnel",
+                  "fields": [
+                    {
+                      "name": "sum(row_count)",
+                      "expression": "SUM(`row_count`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "stream IN ('Ratings')"
+                    },
+                    {
+                      "expression": "layer IN ('2 · Silver')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Total Ratings"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(row_count)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "tu_counter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "users_funnel",
+                  "fields": [
+                    {
+                      "name": "count(user_id)",
+                      "expression": "COUNT(`user_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Total Users"
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(user_id)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 5,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "rank_books",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "books_funnel",
+                  "fields": [
+                    {
+                      "name": "book_title",
+                      "expression": "`book_title`"
+                    },
+                    {
+                      "name": "measure(Avg Explicit Rating)",
+                      "expression": "MEASURE(`Avg Explicit Rating`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "explicit_ratings >= 3"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "MEASURE(`Avg Explicit Rating`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Top 10 Books (avg explicit rating, min 3)"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "book_title",
+                  "displayName": "Book",
+                  "scale": {
+                    "categorySize": {
+                      "number": 10,
+                      "type": "number-of-categories"
+                    },
+                    "type": "categorical",
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "measure(Avg Explicit Rating)"
+                      }
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(Avg Explicit Rating)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 2,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "displayName": "Avg explicit rating",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "rank_authors",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "books_funnel",
+                  "fields": [
+                    {
+                      "name": "book_author",
+                      "expression": "`book_author`"
+                    },
+                    {
+                      "name": "measure(Avg Explicit Rating)",
+                      "expression": "MEASURE(`Avg Explicit Rating`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "explicit_ratings >= 3"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "MEASURE(`Avg Explicit Rating`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Top 10 Authors (avg explicit rating, min 3)"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "book_author",
+                  "displayName": "Author",
+                  "scale": {
+                    "categorySize": {
+                      "number": 10,
+                      "type": "number-of-categories"
+                    },
+                    "type": "categorical",
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "measure(Avg Explicit Rating)"
+                      }
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(Avg Explicit Rating)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 2,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "displayName": "Avg explicit rating",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 7,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "rank_publishers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "books_funnel",
+                  "fields": [
+                    {
+                      "name": "publisher",
+                      "expression": "`publisher`"
+                    },
+                    {
+                      "name": "measure(Avg Explicit Rating)",
+                      "expression": "MEASURE(`Avg Explicit Rating`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "explicit_ratings >= 3"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "MEASURE(`Avg Explicit Rating`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Top 10 Publishers (avg explicit rating, min 3)",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "publisher",
+                  "displayName": "Publisher",
+                  "scale": {
+                    "categorySize": {
+                      "number": 10,
+                      "type": "number-of-categories"
+                    },
+                    "type": "categorical",
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "measure(Avg Explicit Rating)"
+                      }
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(Avg Explicit Rating)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 2,
+                      "type": "max"
+                    },
+                    "type": "number-plain"
+                  },
+                  "displayName": "Avg explicit rating",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 7,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "table_active",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "active_users",
+                  "fields": [
+                    {
+                      "name": "user_id",
+                      "expression": "`user_id`"
+                    },
+                    {
+                      "name": "country",
+                      "expression": "`country`"
+                    },
+                    {
+                      "name": "age",
+                      "expression": "`age`"
+                    },
+                    {
+                      "name": "explicit_count",
+                      "expression": "`explicit_count`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "list_type IN ('Active (Explicit)')"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "`explicit_count`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Most Active Users (unfiltered)",
+                  "fields": []
+                }
+              },
+              "displayRowNumbers": true,
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "user_id",
+                    "displayName": "User"
+                  },
+                  {
+                    "fieldName": "country",
+                    "displayName": "Country"
+                  },
+                  {
+                    "fieldName": "age",
+                    "displayName": "Age"
+                  },
+                  {
+                    "fieldName": "explicit_count",
+                    "displayName": "Explicit ratings"
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column-reversed",
+                    "field": {
+                      "index": 3
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "filterSources": {
+              "mode": "EXCLUDE",
+              "global": {
+                "all": true
+              },
+              "page": {
+                "all": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 6,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "table_buyers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "active_users",
+                  "fields": [
+                    {
+                      "name": "user_id",
+                      "expression": "`user_id`"
+                    },
+                    {
+                      "name": "country",
+                      "expression": "`country`"
+                    },
+                    {
+                      "name": "age",
+                      "expression": "`age`"
+                    },
+                    {
+                      "name": "rating_count",
+                      "expression": "`rating_count`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "list_type IN ('Buyers (All Ratings)')"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "`rating_count`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Highest Buyers (unfiltered)",
+                  "fields": []
+                }
+              },
+              "displayRowNumbers": true,
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "user_id",
+                    "displayName": "User"
+                  },
+                  {
+                    "fieldName": "country",
+                    "displayName": "Country"
+                  },
+                  {
+                    "fieldName": "age",
+                    "displayName": "Age"
+                  },
+                  {
+                    "fieldName": "rating_count",
+                    "displayName": "Total Purchases"
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column-reversed",
+                    "field": {
+                      "index": 3
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "filterSources": {
+              "mode": "EXCLUDE",
+              "global": {
+                "all": true
+              },
+              "page": {
+                "all": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 15,
+            "width": 6,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "users_map",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "users_funnel",
+                  "fields": [
+                    {
+                      "name": "count(user_id)",
+                      "expression": "COUNT(`user_id`)"
+                    },
+                    {
+                      "name": "country",
+                      "expression": "`country`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Users by Country (Map)",
+                  "fields": []
+                }
+              },
+              "version": 1,
+              "widgetType": "choropleth-map",
+              "encodings": {
+                "color": {
+                  "fieldName": "count(user_id)",
+                  "displayName": "Users",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "region": {
+                  "regionType": "mapbox-v4-admin",
+                  "admin0": {
+                    "fieldName": "country",
+                    "geographicRole": "admin0-name",
+                    "type": "field"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 23,
+            "width": 6,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "books_layer_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ratings_funnel",
+                  "fields": [
+                    {
+                      "name": "layer",
+                      "expression": "`layer`"
+                    },
+                    {
+                      "name": "sum(row_count)",
+                      "expression": "SUM(`row_count`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "stream IN ('Books')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Books — Rows by Layer"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "layer",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "1 · Bronze",
+                        "2 · Silver",
+                        "3 · Quarantined (silver)",
+                        "4 · Gold"
+                      ]
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(row_count)",
+                  "displayName": "Books",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 31,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "ratings_layer_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ratings_funnel",
+                  "fields": [
+                    {
+                      "name": "layer",
+                      "expression": "`layer`"
+                    },
+                    {
+                      "name": "sum(row_count)",
+                      "expression": "SUM(`row_count`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "stream IN ('Ratings')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Ratings — Rows by Layer"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "layer",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "1 · Bronze",
+                        "2 · Silver",
+                        "3 · Quarantined (silver)"
+                      ]
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(row_count)",
+                  "displayName": "Ratings",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 31,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "users_layer_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ratings_funnel",
+                  "fields": [
+                    {
+                      "name": "layer",
+                      "expression": "`layer`"
+                    },
+                    {
+                      "name": "sum(row_count)",
+                      "expression": "SUM(`row_count`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "stream IN ('Users')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "Users — Rows by Layer"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "layer",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "1 · Bronze",
+                        "2 · Silver",
+                        "3 · Quarantined (silver)"
+                      ]
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(row_count)",
+                  "displayName": "Users",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 31,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "age_histogram",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "users_funnel",
+                  "fields": [
+                    {
+                      "name": "age_bin",
+                      "expression": "`age_bin`"
+                    },
+                    {
+                      "name": "count(user_id)",
+                      "expression": "COUNT(`user_id`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`age` IS NOT NULL"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": "User Age Distribution"
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "age_bin",
+                  "displayName": "Age (start of 10-year bin)",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        0,
+                        10,
+                        20,
+                        30,
+                        40,
+                        50,
+                        60,
+                        70,
+                        80,
+                        90,
+                        100,
+                        110
+                      ]
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "count(user_id)",
+                  "displayName": "Users",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 23,
+            "width": 6,
+            "height": 8
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}

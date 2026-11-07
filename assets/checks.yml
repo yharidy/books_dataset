@@ -1,0 +1,16 @@
+resources:
+  jobs:
+    deploy_silver_checks:
+      name: "Deploy Silver Check Functions ${bundle.target}"
+      tags:
+        environment: ${bundle.target}
+        dataset: "books_dataset"
+        layer: "silver"
+      tasks:
+        - task_key: create_validation_functions
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/books_dataset/silver/checks/validity_checks.sql
+            parameters:
+              catalog: ${var.catalog}

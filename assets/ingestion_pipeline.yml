@@ -1,8 +1,11 @@
 resources:
   jobs:
-    books_dataset_pipeline:
-      name: "Books Dataset Pipeline"
-
+    books_dataset_ingestion_pipeline:
+      name: "Books Dataset Ingestion Pipeline"
+      tags:
+        environment: ${bundle.target}
+        dataset: "books_dataset"
+        layer: "multi-layer"
       trigger:
         file_arrival:
           url: /Volumes/${var.catalog}/bronze/landing/
@@ -66,3 +69,30 @@ resources:
               - "/Volumes/${var.catalog}/bronze/checkpoints/users"
               - "--schema-dir"
               - "/Volumes/${var.catalog}/bronze/schemas/users"
+        - task_key: books_silver
+          depends_on:
+            - task_key: books_autoloader
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.books_silver_pipeline.id}
+        - task_key: ratings_silver
+          depends_on:
+            - task_key: ratings_autoloader
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.ratings_silver_pipeline.id}
+        - task_key: users_silver
+          depends_on:
+            - task_key: users_autoloader
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.users_silver_pipeline.id}
+        - task_key: books_rating_stats_gold
+          depends_on:
+            - task_key: books_silver
+            - task_key: ratings_silver
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.books_rating_stats_gold_pipeline.id}
+        - task_key: refresh_dashboard
+          depends_on:
+            - task_key: books_rating_stats_gold
+            - task_key: users_silver
+          dashboard_task:
+            dashboard_id: ${resources.dashboards.books_overview.id}

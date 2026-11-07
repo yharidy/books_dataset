@@ -1,0 +1,44 @@
+resources:
+  pipelines:
+    books_silver_pipeline:
+      name: books_silver_${bundle.target}
+      tags:
+        environment: ${bundle.target}
+        dataset: "books_dataset"
+        layer: "silver"
+      serverless: true
+      catalog: ${var.catalog}
+      schema: silver
+      configuration:
+        catalog: ${var.catalog}
+      libraries:
+        - file:
+            path: ../src/books_dataset/silver/tables/books.sql
+    ratings_silver_pipeline:
+      name: ratings_silver_${bundle.target}
+      tags:
+        environment: ${bundle.target}
+        dataset: "books_dataset"
+        layer: "silver"
+      serverless: true
+      catalog: ${var.catalog}
+      schema: silver
+      configuration:
+        catalog: ${var.catalog}
+      libraries:
+        - file:
+            path: ../src/books_dataset/silver/tables/ratings.sql
+    users_silver_pipeline:
+      name: users_silver_${bundle.target}
+      tags:
+        environment: ${bundle.target}
+        dataset: "books_dataset"
+        layer: "silver"
+      serverless: true
+      catalog: ${var.catalog}
+      schema: silver
+      configuration:
+        catalog: ${var.catalog}
+      libraries:
+        - file:
+            path: ../src/books_dataset/silver/tables/users.sql
