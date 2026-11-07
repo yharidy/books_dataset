@@ -365,7 +365,7 @@
                   "lines": [
                     "# 📚 Books Lakehouse Dashboard\n",
                     "\n",
-                    "**What this shows** — the Book-Crossing lakehouse, stage by stage. Bronze ingests the raw CSVs, silver validates each row (bad rows are quarantined, not dropped), and gold joins validated books with their rating stats via a metric view.<br>**How to use it** — slice every widget with the filters above: publication period (default 1995–2004), author, publisher, and country. The rankings average explicit ratings (1–10 scale, implicit 0 ratings excluded, books with ≥3 explicit ratings only); the user tables list the 10 most active raters and the 10 “highest buyers” (all ratings incl. implicit); and the bottom bar charts show how many rows survive each pipeline layer."
+                    "**What this shows** — the Book-Crossing lakehouse, stage by stage. Bronze ingests the raw CSVs, silver validates each row (bad rows are quarantined, not dropped), and gold joins validated books with their rating stats via a metric view.<br>**How to use it** — slice every widget with the filters above: publication period (default 1995–2004), author, publisher, and country. The rankings average explicit ratings (1–10 scale, implicit 0 ratings excluded, books with ≥100 explicit ratings only); the user tables list the 10 most active raters and the 10 “highest buyers” (all ratings incl. implicit); and the bottom bar charts show how many rows survive each pipeline layer."
                   ],
                   "fields": []
                 }
@@ -720,6 +720,10 @@
                   "datasetName": "books_funnel",
                   "fields": [
                     {
+                      "name": "sum(explicit_ratings)",
+                      "expression": "SUM(`explicit_ratings`)"
+                    },
+                    {
                       "name": "book_title",
                       "expression": "`book_title`"
                     },
@@ -730,7 +734,7 @@
                   ],
                   "filters": [
                     {
-                      "expression": "explicit_ratings >= 3"
+                      "expression": "explicit_ratings >= 100"
                     }
                   ],
                   "disaggregated": false,
@@ -746,7 +750,10 @@
             "spec": {
               "frame": {
                 "showTitle": true,
-                "title": "Top 10 Books (avg explicit rating, min 3)"
+                "title": {
+                  "value": "Top 20 Books (avg explicit rating, min 100)",
+                  "fields": []
+                }
               },
               "version": 3,
               "widgetType": "bar",
@@ -756,7 +763,7 @@
                   "displayName": "Book",
                   "scale": {
                     "categorySize": {
-                      "number": 10,
+                      "number": 20,
                       "type": "number-of-categories"
                     },
                     "type": "categorical",
@@ -782,7 +789,13 @@
                   "scale": {
                     "type": "quantitative"
                   }
-                }
+                },
+                "extra": [
+                  {
+                    "fieldName": "sum(explicit_ratings)",
+                    "displayName": "Explicit ratings"
+                  }
+                ]
               },
               "data": {
                 "queryName": "main_query"
@@ -806,6 +819,10 @@
                   "datasetName": "books_funnel",
                   "fields": [
                     {
+                      "name": "sum(explicit_ratings)",
+                      "expression": "SUM(`explicit_ratings`)"
+                    },
+                    {
                       "name": "book_author",
                       "expression": "`book_author`"
                     },
@@ -816,7 +833,7 @@
                   ],
                   "filters": [
                     {
-                      "expression": "explicit_ratings >= 3"
+                      "expression": "explicit_ratings >= 100"
                     }
                   ],
                   "disaggregated": false,
@@ -832,7 +849,7 @@
             "spec": {
               "frame": {
                 "showTitle": true,
-                "title": "Top 10 Authors (avg explicit rating, min 3)"
+                "title": "Top 20 Authors (avg explicit rating, min 100)"
               },
               "version": 3,
               "widgetType": "bar",
@@ -842,7 +859,7 @@
                   "displayName": "Author",
                   "scale": {
                     "categorySize": {
-                      "number": 10,
+                      "number": 20,
                       "type": "number-of-categories"
                     },
                     "type": "categorical",
@@ -868,7 +885,13 @@
                   "scale": {
                     "type": "quantitative"
                   }
-                }
+                },
+                "extra": [
+                  {
+                    "fieldName": "sum(explicit_ratings)",
+                    "displayName": "Explicit ratings"
+                  }
+                ]
               },
               "data": {
                 "queryName": "main_query"
@@ -892,6 +915,10 @@
                   "datasetName": "books_funnel",
                   "fields": [
                     {
+                      "name": "sum(explicit_ratings)",
+                      "expression": "SUM(`explicit_ratings`)"
+                    },
+                    {
                       "name": "publisher",
                       "expression": "`publisher`"
                     },
@@ -902,7 +929,7 @@
                   ],
                   "filters": [
                     {
-                      "expression": "explicit_ratings >= 3"
+                      "expression": "explicit_ratings >= 100"
                     }
                   ],
                   "disaggregated": false,
@@ -918,10 +945,7 @@
             "spec": {
               "frame": {
                 "showTitle": true,
-                "title": {
-                  "value": "Top 10 Publishers (avg explicit rating, min 3)",
-                  "fields": []
-                }
+                "title": "Top 20 Publishers (avg explicit rating, min 100)"
               },
               "version": 3,
               "widgetType": "bar",
@@ -931,7 +955,7 @@
                   "displayName": "Publisher",
                   "scale": {
                     "categorySize": {
-                      "number": 10,
+                      "number": 20,
                       "type": "number-of-categories"
                     },
                     "type": "categorical",
@@ -957,7 +981,13 @@
                   "scale": {
                     "type": "quantitative"
                   }
-                }
+                },
+                "extra": [
+                  {
+                    "fieldName": "sum(explicit_ratings)",
+                    "displayName": "Explicit ratings"
+                  }
+                ]
               },
               "data": {
                 "queryName": "main_query"
