@@ -1,6 +1,6 @@
 # Books Lakehouse — Architecture & Design
 
-An end-to-end lakehouse for the Book-Crossing dataset, built on Databricks: medallion architecture (bronze → silver → gold), orchestrated as a **Declarative Automation Bundle (DAB)**, with an **AI/BI dashboard** as the serving layer.
+An end-to-end lakehouse for the [Book Recommendations dataset](https://www.kaggle.com/datasets/arashnic/book-recommendation-dataset/data), built on Databricks: medallion architecture (bronze → silver → gold), orchestrated as a **Declarative Automation Bundle (DAB)**, with a **dashboard** as the serving layer.
 
 ---
 
@@ -8,10 +8,10 @@ An end-to-end lakehouse for the Book-Crossing dataset, built on Databricks: meda
 
 ```mermaid
 flowchart LR
-    subgraph SRC["Book-Crossing CSV exports"]
-        A1["BX-Books"]
-        A2["BX-Book-Ratings"]
-        A3["BX-Users"]
+    subgraph SRC["CSV uploaded to the landing volume of the bronze layer"]
+        A1["Books"]
+        A2["Book-Ratings"]
+        A3["Users"]
     end
 
     subgraph BR["BRONZE — raw, as ingested"]
@@ -31,7 +31,7 @@ flowchart LR
         D1{{"books_rating_stats<br/>materialized view"}}
     end
 
-    DASH["AI/BI Dashboard<br/>Books Lakehouse Overview"]
+    DASH["Dashboard<br/>Books Lakehouse Overview"]
 
     A1 -->|"Auto Loader"| B1
     A2 -->|"Auto Loader"| B2
@@ -61,24 +61,24 @@ The bundle name is `books_dataset` with two targets — **dev** (`books_dataset_
 
 ```text
 books_dataset/
-├── databricks.yml                        # bundle + targets, ${var.catalog}, ${var.warehouse_id}
+├── databricks.yml                        # bundle + targets
 ├── variables.yml                         # variable defaults
 ├── assets/
-│   ├── ingestion_pipeline.yml            # bronze Auto Loader pipeline
-│   ├── silver_pipelines.yml              # 3 pipelines: books / ratings / users
-│   ├── checks.yml                        # job that deploys the UC SQL check functions
-│   ├── gold_pipeline.yml                 # gold materialized view pipeline
-│   └── dashboards.yml                    # dashboard resource (dataset_catalog per target)
+│   ├── ingestion_pipeline.yml            # end-to-end pipeline (autoloaders + silver pipelines + gold pipeline + dashboard refresh)
+│   ├── silver_pipelines.yml              # silver streaming tables pipelines: books / ratings / users
+|   |── gold_pipeline.yml                 # gold materialized view pipeline 
+|   |── dashboards.yml                    # dashboard resource
+│   ├── checks.yml                        # job that deploys the silver layer validity checks as functions (triggered once)
 ├── dashboards/
 │   └── Books_Lakehouse_Overview.lvdash.json
 ├── src/books_dataset/
 │   ├── bronze/
 │   │   └── autoloader.py                 # CSV ingestion from landing volume
 │   ├── silver/
-│   │   ├── tables/
-│   │   │   ├── books.sql
+│   │   ├── tables/                       # Auto CDC -> SCD 1 Streaming Tables + quarantine
+│   │   │   ├── books.sql                
 │   │   │   ├── ratings.sql
-│   │   │   └── users.sql                 # Auto CDC → SCD1 streaming table + quarantine
+│   │   │   └── users.sql                 
 │   │   └── checks/
 │   │       └── validity_checks.sql       # UC functions: valid_book_data / valid_ratings_data / valid_users_data
 │   └── gold/
@@ -96,6 +96,7 @@ books_dataset/
 * One managed table per source file: `bronze.books_raw`, `bronze.ratings_raw`, `bronze.users_raw`.
 * **Original column names preserved** (e.g. `Book-Author`, `Year-Of-Publication`, `ISBN`) plus ingestion metadata (`_ingestion_time`).
 * Ingested with **Auto Loader** from a landing volume; checkpoints and inferred schemas live in dedicated volumes (`bronze.checkpoints`, `bronze.schemas`).
+* Auto Loader is configured with `cloudFiles.schemaEvolutionMode = addNewColumns` and `rescuedDataColumn = _rescued_data`: new columns are tolerated, but any row that still does not match the schema or parsing expectations is not dropped silently; it is captured in the rescued column for inspection.
 
 ### Silver — validated, deduplicated, normalized
 
@@ -111,8 +112,7 @@ Design details worth calling out:
 
 * **Check functions are Unity Catalog SQL UDFs** (`valid_book_data`, `valid_ratings_data`, `valid_users_data`), deployed by a dedicated job as a parameterized SQL file (with a `{{catalog}}` placeholder), so the same logic is reusable and testable outside the pipelines.
 * **Latest-version-wins dedup** on natural keys (ISBN / user-book pair / user_id) driven by `_ingestion_time`.
-* ANSI mode is on, so casts use `TRY_CAST` — malformed strings are quarantined rather than crashing the pipeline.
-* Re-ingesting an already-known key **updates in place** instead of appending a duplicate.
+
 
 ### Gold — one additive materialized view
 
@@ -139,29 +139,76 @@ Because both operands are additive, this recomputes correctly under *any* groupi
 ---
 
 ## 4. Data model
-
+#### bronze layer
 ```mermaid
 erDiagram
-    BOOKS ||--o{ RATINGS : "receives"
-    USERS ||--o{ RATINGS : "gives"
+    BOOKS_RAW {
+        string ISBN PK
+        string Book-Title
+        string Book-Author
+        string Year-Of-Publication
+        string Publisher
+        string Image-URL-S
+        string Image-URL-M
+        string Image-URL-L
+        string _rescued_data
+        string _source_file_path
+        timestamp _source_file_modification_time
+        timestamp _ingestion_time
+    }
+    RATINGS {
+        string User-ID FK
+        string ISBN FK
+        string Book-Rating	 "0 = implicit, 1-10 = explicit"
+        string _rescued_data
+        string _source_file_path
+        timestamp _source_file_modification_time
+        timestamp _ingestion_time
+    }
+    USERS {
+        string User-ID PK
+        string Location
+        string Location
+        string _rescued_data
+        string _source_file_path
+        timestamp _source_file_modification_time
+        timestamp _ingestion_time
+    }
+```
 
+#### Silver layer
+```mermaid
+erDiagram
     BOOKS {
         string isbn PK
         string book_title
         string book_author
         string publisher
         int year_of_publication
+        string image_url_s
+        string image_url_m
+        string image_url_l
+        timestamp _ingestion_time
     }
     RATINGS {
         string user_id FK
         string isbn FK
         int book_rating "0 = implicit, 1-10 = explicit"
+        timestamp _ingestion_time
     }
     USERS {
         string user_id PK
-        int age
+        double age
+        string city
+        string state
         string country
+        timestamp _ingestion_time
     }
+```
+
+#### Gold layer
+```mermaid
+erDiagram
     BOOKS_RATING_STATS {
         string isbn PK
         bigint total_ratings
@@ -170,103 +217,63 @@ erDiagram
         bigint sum_ratings
     }
 ```
-
 ---
 
 ## 5. Dashboard design — Books Lakehouse Overview
 
-A single-page AI/BI dashboard built on **four deliberately simple SQL datasets**, each mapped to a specific widget group:
+A single-page dashboard built on four SQL datasets, each mapped to a specific widget group:
 
-| # | Dataset | Source | Purpose |
+| Dataset | Source tables | Purpose | Widgets it serves |
 | --- | --- | --- | --- |
-| 1 | **Gold Books (MV)** | `gold.books_rating_stats` + publication-period parameter | KPI, top-10 rankings, author/publisher filters |
-| 2 | **Layer Counts** | one `UNION ALL` of row counts per stream x layer (bronze / silver / quarantined / gold), period-guarded | Ratings KPI, three rows-per-layer bar charts |
-| 3 | **Silver Users** | plain `SELECT` from `silver.users` (+ `age_bin`, normalized country names) | Users KPI, age histogram, country map, country filter |
-| 4 | **Top Users by Activity** | `silver.ratings` grouped by user (explicit count, total count), top 10 each | two user tables, **unfiltered** |
+| Gold Books (MV) | `gold.books_rating_stats` | Per-book rating stats, filtered by publication year | Total Books; Top 20 Books, Authors, and Publishers rankings; Author and Publisher filters |
+| Silver Users | `silver.users` | Validated users with normalized country names and age bins | Total Users; Users by Country map; User Age Distribution; Country filter |
+| Layer Counts | Bronze, silver, and gold tables for all three streams | Row counts per pipeline layer (bronze → silver → quarantined → gold), filtered by year | Total Ratings; Books, Ratings, and Users Rows by Layer charts |
+| Top Users by Activity | `silver.ratings` joined to `silver.users` | Top users by explicit rating activity and total ratings, unfiltered | Most Active Users and Highest Buyers tables |
 
-### Widget and filter wiring
+### Dashboard visuals
 
-```mermaid
-flowchart TB
-    subgraph F["Global filters"]
-        F1["Publication Period<br/>(date range -> pub_year_range)"]
-        F2["Author"]
-        F3["Publisher"]
-        F4["Country"]
-    end
+The full dashboard PDF is available in [docs/dashboard.pdf](docs/dashboard.pdf).
 
-    subgraph D["Datasets"]
-        DS1["Gold Books (MV)"]
-        DS2["Layer Counts"]
-        DS3["Silver Users"]
-        DS4["Top Users by Activity<br/>(unfiltered)"]
-    end
+![Dashboard overview](docs/dashboard.png)
 
-    subgraph W["Widgets"]
-        K1["KPI: Total Books"]
-        K2["KPI: Total Ratings"]
-        K3["KPI: Total Users"]
-        R1["Top 10 Books - avg explicit rating"]
-        R2["Top 10 Authors - avg explicit rating"]
-        R3["Top 10 Publishers - avg explicit rating"]
-        T1["Most Active Users (unfiltered)"]
-        T2["Highest Buyers (unfiltered)"]
-        H["User Age Distribution<br/>(10-year bins, 0-120)"]
-        M["Users by Country (map)"]
-        L["3 x rows-per-layer bar charts<br/>(Books / Ratings / Users)"]
-    end
-
-    DS1 --> K1
-    DS1 --> R1
-    DS1 --> R2
-    DS1 --> R3
-    DS2 --> K2
-    DS2 --> L
-    DS3 --> K3
-    DS3 --> H
-    DS3 --> M
-    DS4 --> T1
-    DS4 --> T2
-
-    F1 -.-> DS1
-    F1 -.-> DS2
-    F2 -.-> DS1
-    F3 -.-> DS1
-    F4 -.-> DS3
-```
-
-Key behaviour:
-
-* **Rankings** group the gold MV by book / author / publisher, filter to books with **>= 3 explicit ratings**, and use the shared `Avg Explicit Rating` measure — the same additive SUM/COUNT formula, so rankings stay correct under every filter.
-* **The two user tables are intentionally exempt from all filters** (widget-level ignore-filters): they always show the overall top-10 raters and top-10 buyers, and their titles say so with an `(unfiltered)` suffix.
-* **Country names are normalized in SQL** for geocoding: `INITCAP(...)` plus a `usa -> 'United States of America'` fix-up, so the choropleth map resolves properly.
-* **The age histogram** bins ages into 10-year buckets via a computed `age_bin` column in the dataset (null ages filtered out), plotted on a fixed 0-120 axis.
-
-### Known data caveats
-
-* Book-Crossing has **no rating timestamps** — the only time dimension is `year_of_publication`. The Publication Period filter therefore slices by publication year, never by rating date.
-* The `>= 3 explicit ratings` threshold is tuned for the (small) dev dataset; with the full dataset it filters out noise books with a single rating.
-* The dev environment runs on a sample of the data, so counts shown are dev-scale.
+| Image | View |
+| --- | --- |
+| ![Users by country](docs/map.png) | ![User age distribution](docs/user_age_distribution.png) |
 
 ---
 
-## 6. Deployment and environments
+## 6. Developer setup and deployment
 
-* `databricks bundle deploy -t dev` targets catalog `books_dataset_dev`; `-t prod` targets `books_dataset_prod`.
-* The silver check functions are deployed by a dedicated job that rewrites `{{catalog}}` in the SQL file, so each environment gets its own copies of the UDFs.
-* The dashboard is checked into the bundle as a resource with `dataset_catalog: ${var.catalog}` and `warehouse_id: ${var.warehouse_id}` — dataset queries reference **unqualified** table names, so the same dashboard JSON resolves against whichever catalog the target deploys to.
-* The dashboard queries tables live on open; no refresh schedule is required at this dataset size.
+Use the repo's devcontainer, which includes the Databricks CLI, Terraform, and Python tooling such as PySpark. A Databricks account and CLI login are required. On Free Edition, create the catalogs in the workspace first; Terraform creates their schemas and volumes, not the catalogs.
 
----
+1. Authenticate to your workspace:
 
-## 7. Design decisions and lessons learned
+    ```bash
+    databricks auth login --host <workspace-url> --profile free
+    ```
 
-1. **Quarantine, don't drop.** Every silver stream has an `*_invalid` twin; the dashboard surfaces quarantine counts as a first-class funnel stage, making data-quality regressions visible at a glance.
-2. **Additive gold measures.** Store sums and counts, derive averages at query time. This is what lets three different rankings (book / author / publisher) share one materialized view and one measure.
-3. **Minimal gold.** The gold layer resisted growing a family of per-question aggregates; one book-grain MV covers all of them by re-grouping.
-4. **Unqualified UC function calls don't resolve the way you'd expect.** Inside a pipeline, `valid_users_data(...)` resolves against the session's current schema, not the pipeline's catalog/schema — check functions must be fully qualified (and pipelines configured with the catalog).
-5. **Batch views must be read with `read` in streaming pipelines.** Defining quality-check views with `FROM STREAM(bronze.*)` inside the view fixes the otherwise-confusing "view is not a streaming view" error.
-6. **ANSI mode changes error behaviour.** `CAST('x' AS INT)` throws; `TRY_CAST` routes bad values to quarantine instead.
-7. **Widgets accept plain columns; datasets accept expressions.** Precomputed bins (like `age_bin`) belong in the dataset SQL — the widget layer strips computed field expressions.
-8. **Dashboard tags can't be set from the bundle (yet).** They live on the deployed dashboard object and are managed in the UI; `bundle deploy` preserves them.
+2. Set the existing catalog names in `infra/terraform/terraform.tfvars`:
+
+    ```hcl
+    catalogs = ["books_dataset_dev", "books_dataset_prod"]
+    ```
+
+3. Create the schemas and volumes:
+
+    ```bash
+    cd infra/terraform
+    terraform init
+    terraform plan
+    terraform apply
+    ```
+
+4. Return to the repository root, then validate and deploy the bundle. Use `-t prod` for production instead of `-t dev`:
+
+    ```bash
+    cd ../..
+    databricks bundle validate -t dev
+    databricks bundle deploy -t dev
+    ```
+
+
 

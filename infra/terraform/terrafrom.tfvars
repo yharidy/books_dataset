@@ -1,1 +1,0 @@
-catalogs = ["books_dataset_dev", "books_dataset_prod"]

@@ -7,3 +7,4 @@ data/
 *devcontainer-lock.json
 .venv
 .vscode
+dist
